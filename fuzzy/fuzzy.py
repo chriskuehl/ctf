@@ -1,8 +1,11 @@
+import cgi
 import hashlib
+import io
 import json
 import mimetypes
 import os
 import re
+import shutil
 import urllib.parse
 import uuid
 
@@ -49,6 +52,7 @@ class Request:
     def __init__(self, environ):
         self._environ = environ
         self._request_body = environ['wsgi.input'].read()
+        self.fs = cgi.FieldStorage(fp=io.BytesIO(self._request_body), environ=environ)
 
     @property
     def path(self):
@@ -100,6 +104,14 @@ class Response:
             headers=(
                 ('Content-Type', 'text/html; charset=utf-8'),
             ) + headers,
+        )
+
+    @classmethod
+    def bad_request(cls):
+        return cls(
+            status='400 Bad Request',
+            body=b'400 Bad Request',
+            headers=(),
         )
 
 
@@ -184,6 +196,25 @@ def view_logout(request, match):
     )
 
 
+def view_upload(request, match):
+    if request.method != 'POST':
+        return Response.bad_request()
+
+    # TODO: fix
+    upload = request.fs['file']
+    filename = upload.filename
+    with open(os.path.join('data', 'uploads', filename), 'wb') as f:
+        shutil.copyfileobj(upload.file, f)
+
+    return Response(
+        status='302 Found',
+        body=b'',
+        headers=(
+            ('Location', '/data/uploads/' + filename),
+        ),
+    )
+
+
 def view_static(request, match):
     name = match.group(1)
     guessed = mimetypes.guess_type(name)
@@ -205,7 +236,9 @@ URL_MAPPING = (
     ('^/register$', view_register),
     ('^/login$', view_login),
     ('^/logout$', view_logout),
+    ('^/upload$', view_upload),
     ('^/(main\.css|meyer\.css)$', view_static),
+    ('^/(data/(?:uploads|user)/[^/]+)$', view_data),
 )
 URL_MAPPING = tuple(
     (re.compile(pattern), view) for pattern, view in URL_MAPPING

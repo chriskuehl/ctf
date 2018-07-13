@@ -19,31 +19,47 @@
         <p>Thanks for logging in!</p>
 
         <hr />
-        <h3>Upload File from Computer</h3>
-        <form method="POST" action="/upload">
+        <div class="sidebyside left">
+            <h3>Upload File from Computer</h3>
             <p>
-                <label for="file">
-                    File:
-                    <input type="file" id="file" name="file" />
-                </label>
+                Browse your computer to find a file to upload.
             </p>
+            <form method="POST" action="/upload" class="boxform"  enctype="multipart/form-data">
+                <p>
+                    <label for="file">
+                        File:
+                        <input type="file" id="file" name="file" />
+                    </label>
+                </p>
+                <p>
+                    <input type="submit" value="Upload" />
+                </p>
+            </form>
+        </div>
+        <div class="sidebyside right">
+            <h3>Upload File from URL</h3>
             <p>
-                <input type="submit" value="Upload" />
+                <strong style="color: red;">New!</strong> Upload to fuzzy by providing an existing
+                URL. We'll download and re-upload it for you automagically
             </p>
-        </form>
-
-        <hr />
-        <h3>Upload File from URL</h3>
-        <form method="POST" action="/upload-url">
-            <p>
-                <label for="url">
-                    URL:
-                    <input type="text" id="url" name="url" />
-                </label>
-            </p>
-            <p>
-                <input type="submit" value="Upload from URL" />
-            </p>
-        </form>
+            <form method="POST" action="/upload-url" class="boxform">
+                <p>
+                    <label for="url">
+                        URL:
+                        <input
+                           type="text"
+                           id="url"
+                           name="url"
+                           style="width: 100%;"
+                           placeholder="https://example.com/something.png"
+                         />
+                    </label>
+                </p>
+                <p>
+                    <input type="submit" value="Upload from URL" />
+                </p>
+            </form>
+        </div>
+        <div style="clear: both;"></div>
     {% endif %}
 {% endblock %}

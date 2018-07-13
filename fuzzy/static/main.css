@@ -5,7 +5,7 @@ body {
 }
 
 .container {
-    padding: 20px;
+    padding: 30px;
     border-radius: 10px;
     background-color: #ffe4ef;
     max-width: 1200px;
@@ -59,4 +59,25 @@ tt {
 
 strong {
     font-weight: bold;
+}
+
+.sidebyside {
+    width: 50%;
+    box-sizing: border-box;
+    float: left;
+}
+
+.sidebyside.left {
+    padding-right: 10px;
+}
+
+.sidebyside.right {
+    padding-left: 10px;
+}
+
+.boxform {
+    background-color: rgba(255, 255, 255, 0.5);
+    border: solid 1px #ddd;
+    padding: 10px;
+    padding-bottom: 0;
 }
