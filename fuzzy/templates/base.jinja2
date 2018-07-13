@@ -10,6 +10,13 @@
         <div class="container">
             <h1><a href="/">y/fuzzy</a></h1>
             <hr />
+            {% if request.user %}
+                <p style="text-align: right;">
+                    Currently logged in as <tt>{{request.user.username}}</tt>.
+                    <a href="/logout">Log Out</a>
+                </p>
+                <hr />
+            {% endif %}
 
             {% block content %}
             {% endblock %}

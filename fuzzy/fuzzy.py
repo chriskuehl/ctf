@@ -23,14 +23,17 @@ def hashed_thing(thing):
     ).hexdigest())[:20]
 
 
-def user_data_path(username):
-    hashed = hashed_thing(username)
+def user_data_path(username, hashed=False):
+    if not hashed:
+        hashed = hashed_thing(username)
+    else:
+        hashed = username
     return os.path.join('data', 'users', hashed + '.json')
 
 
-def load_user(username):
+def load_user(username, hashed=False):
     try:
-        with open(user_data_path(username)) as f:
+        with open(user_data_path(username, hashed=hashed)) as f:
             return json.load(f)
     except FileNotFoundError:
         return None
@@ -59,6 +62,21 @@ class Request:
     def post_params(self):
         return urllib.parse.parse_qs(self._request_body.decode('UTF-8'))
 
+    def header(self, key):
+        return self._environ.get('HTTP_' + key.upper().replace('-', '_'))
+
+    @property
+    def cookies(self):
+        cookies = self.header('Cookie')
+        if cookies:
+            return {
+                k: v
+                for k, v
+                in (x.split('=', 1) for x in cookies.split('; '))
+            }
+        else:
+            return {}
+
 
 class Response:
 
@@ -72,28 +90,28 @@ class Response:
         return [self.body]
 
     @classmethod
-    def from_template(cls, path, args=None):
+    def from_template(cls, request, path, args=None, headers=()):
         if args is None:
             args = {}
-        html = JINJA_ENV.get_template(path).render(**args)
+        html = JINJA_ENV.get_template(path).render(request=request, **args)
         return cls(
             status='200 OK',
             body=html.encode('UTF-8'),
             headers=(
                 ('Content-Type', 'text/html; charset=utf-8'),
-            ),
+            ) + headers,
         )
 
 
 def view_home(request, match):
-    return Response.from_template('index.jinja2')
+    return Response.from_template(request, 'index.jinja2')
 
 
 def view_register(request, match):
     if request.method == 'POST':
         # TODO: could this be a cool thing? re.match without the $?
         valid_re = '[a-z]{3,20}$'
-        username, = request.post_params['username']
+        username, = request.post_params.get('username', ('',))
         if not re.match(valid_re, username):
             error = 'Username must match regex: ' + valid_re
         else:
@@ -106,17 +124,63 @@ def view_register(request, match):
                     'username': username,
                     'hashed_password': hashed_thing(password),
                 }
+                request.user = data
                 save_user(username, data)
                 return Response.from_template(
+                    request,
                     'account_created.jinja2',
                     {'username': username, 'password': password},
+                    headers=(
+                        ('Set-Cookie', 'session=' + hashed_thing(username) + '; Max-Age=31556926'),
+                    ),
                 )
     else:
         error = None
 
     return Response.from_template(
+        request,
         'register.jinja2',
         {'error': error},
+    )
+
+
+def view_login(request, match):
+    if request.method == 'POST':
+        username, = request.post_params.get('username', ('',))
+        password, = request.post_params.get('password', ('',))
+        user = load_user(username)
+        if user is None:
+            error = 'Username does not exist.'
+        else:
+            if hashed_thing(password) != user['hashed_password']:
+                error = 'User exists, but you used the wrong password.'
+            else:
+                return Response(
+                    status='302 Found',
+                    body=b'',
+                    headers=(
+                        ('Location', '/'),
+                        ('Set-Cookie', 'session=' + hashed_thing(username) + '; Max-Age=31556926'),
+                    ),
+                )
+    else:
+        error = None
+
+    return Response.from_template(
+        request,
+        'login.jinja2',
+        {'error': error},
+    )
+
+
+def view_logout(request, match):
+    return Response(
+        status='302 Found',
+        body=b'',
+        headers=(
+            ('Location', '/'),
+            ('Set-Cookie', 'session=; Max-Age=0'),
+        ),
     )
 
 
@@ -139,6 +203,8 @@ def view_static(request, match):
 URL_MAPPING = (
     ('^/$', view_home),
     ('^/register$', view_register),
+    ('^/login$', view_login),
+    ('^/logout$', view_logout),
     ('^/(main\.css|meyer\.css)$', view_static),
 )
 URL_MAPPING = tuple(
@@ -147,6 +213,11 @@ URL_MAPPING = tuple(
 
 
 def execute(request):
+    session = request.cookies.get('session')
+    if session is not None:
+        user = load_user(session, hashed=True)
+        request.user = user
+
     for pattern, view in URL_MAPPING:
         m = pattern.match(request.path)
         if m:
