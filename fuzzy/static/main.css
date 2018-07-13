@@ -6,8 +6,8 @@ body {
 
 .container {
     padding: 20px;
-    border-radius: 20px;
-    background-color: white;
+    border-radius: 10px;
+    background-color: #ffe4ef;
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -27,10 +27,10 @@ hr {
     border: 0;
     height: 2px;
     margin: 15px 0;
-    background-color: #ddd;
+    background-color: #e0bebe;
 }
 
-p, h2, h3 {
+p, h2, h3, ul {
     margin-bottom: 10px;
 }
 
@@ -40,3 +40,23 @@ h2, h3 {
 
 h2 { font-size: 32px; }
 h3 { font-size: 26px; }
+
+small {
+    font-size: 12px;
+}
+
+.error {
+    border: solid 3px red;
+    background-color: pink;
+    padding: 5px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+tt {
+    font-family: monospace;
+}
+
+strong {
+    font-weight: bold;
+}

@@ -1,0 +1,16 @@
+{% extends 'base.jinja2' %}
+
+{% block content %}
+    <h2>Create an Account</h2>
+    {% if error %}
+        <div class="error">{{error}}</div>
+    {% endif %}
+    <form method="POST">
+        <p>
+            <label for="username">Username:</label>
+            <input type="text" name="username" />
+            <small>(lowercase a-z only, please)</small>
+        </p>
+        <p><input type="submit" value="Register" /></p>
+    </form>
+{% endblock %}

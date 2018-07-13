@@ -1,0 +1,14 @@
+{% extends 'base.jinja2' %}
+
+{% block content %}
+    <h2>Account Created</h2>
+    <p>Your new account details:</p>
+    <ul>
+        <li><strong>User Name:</strong> <tt>{{username}}</tt></li>
+        <li><strong>Password:</strong> <tt>{{password}}</tt></li>
+    </ul>
+
+    <p>
+        <a href="/">Back to home page</a>
+    </p>
+{% endblock %}
