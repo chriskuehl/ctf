@@ -3,9 +3,47 @@
 {% block content %}
     <h2>Welcome to fuzzy!</h2>
     <p>
-        In order to upload files for sharing, you need to first create your own fuzzy account.
+        fuzzy is a file-sharing app for use at Yelp.
+        It's sort of like <a href="https://fluffy.yelpcorp.com/">fluffy</a>,
+        except way more secure.
     </p>
-    <p>
-        <a href="/register">Create Account</a> or <a href="/login">Log In</a>
-    </p>
+
+    {% if not request.user %}
+        <p>
+            In order to upload files for sharing, you need to first create your own fuzzy account.
+        </p>
+        <p>
+            <a href="/register">Create Account</a> or <a href="/login">Log In</a>
+        </p>
+    {% else %}
+        <p>Thanks for logging in!</p>
+
+        <hr />
+        <h3>Upload File from Computer</h3>
+        <form method="POST" action="/upload">
+            <p>
+                <label for="file">
+                    File:
+                    <input type="file" id="file" name="file" />
+                </label>
+            </p>
+            <p>
+                <input type="submit" value="Upload" />
+            </p>
+        </form>
+
+        <hr />
+        <h3>Upload File from URL</h3>
+        <form method="POST" action="/upload-url">
+            <p>
+                <label for="url">
+                    URL:
+                    <input type="text" id="url" name="url" />
+                </label>
+            </p>
+            <p>
+                <input type="submit" value="Upload from URL" />
+            </p>
+        </form>
+    {% endif %}
 {% endblock %}
