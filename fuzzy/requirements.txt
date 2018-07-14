@@ -1,2 +1,3 @@
 gunicorn
 jinja2
+requests

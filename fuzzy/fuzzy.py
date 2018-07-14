@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import re
+import requests
 import shutil
 import urllib.parse
 import uuid
@@ -215,20 +216,62 @@ def view_upload(request, match):
     )
 
 
-def view_static(request, match):
-    name = match.group(1)
-    guessed = mimetypes.guess_type(name)
-    if guessed:
+def view_upload_url(request, match):
+    if request.method != 'POST':
+        return Response.bad_request()
+
+    # TODO: fix
+    url, = request.post_params.get('url', ('',))
+    print(url)
+
+    _, ext = os.path.splitext(url)
+    if ext:
+        ext = '.' + ext
+    filename = str(uuid.uuid4()) + ext
+    with open(os.path.join('data', 'uploads', filename), 'wb') as f:
+        req = requests.get(url, timeout=1)
+        req.raise_for_status()
+        f.write(req.content)
+
+    return Response(
+        status='302 Found',
+        body=b'',
+        headers=(
+            ('Location', '/data/uploads/' + filename),
+        ),
+    )
+
+
+def _view_static_files(path):
+    guessed = mimetypes.guess_type(path)
+    if guessed[0]:
         mimetype, _ = guessed
     else:
         mimetype = 'application/octet-stream'
 
-    with open(os.path.join('static', name), 'rb') as f:
+    try:
+        with open(path, 'rb') as f:
+            return Response(
+                status='200 OK',
+                body=f.read(),
+                headers=(
+                    ('Content-Type', mimetype),
+                ),
+            )
+    except FileNotFoundError:
         return Response(
-            status=b'200 OK',
-            body=f.read(),
+            status='404 Not Found',
+            body=b'404 Not Found',
             headers=(),
         )
+
+
+def view_static(request, match):
+    return _view_static_files(os.path.join('static', match.group(1)))
+
+
+def view_data(request, match):
+    return _view_static_files(match.group(1))
 
 
 URL_MAPPING = (
@@ -237,6 +280,7 @@ URL_MAPPING = (
     ('^/login$', view_login),
     ('^/logout$', view_logout),
     ('^/upload$', view_upload),
+    ('^/upload-url$', view_upload_url),
     ('^/(main\.css|meyer\.css)$', view_static),
     ('^/(data/(?:uploads|user)/[^/]+)$', view_data),
 )
