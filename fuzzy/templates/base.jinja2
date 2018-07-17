@@ -10,16 +10,39 @@
         <div class="container">
             <h1><a href="/">y/fuzzy</a></h1>
             <hr />
-            {% if request.user %}
-                <p style="text-align: right;">
-                    Currently logged in as <tt>{{request.user.username}}</tt>.
-                    <a href="/logout">Log Out</a>
-                </p>
-                <hr />
-            {% endif %}
+            <p style="text-align: right;" class="loading">
+                Loading user info...
+            </p>
+            <p style="text-align: right; display: none;" class="logged-out">
+                Not logged in.
+                <a href="/login">Log In</a> or <a href="/register">Register</a>.
+            </p>
+            <p style="text-align: right; display: none;" class="logged-in">
+                Currently logged in as <tt id="user"></tt>.
+                <a href="/logout">Log Out</a>
+            </p>
+            <hr />
 
             {% block content %}
             {% endblock %}
         </div>
+
+        <!-- react is overrated -->
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+        <script>
+            $(document).ready(function() {
+                setTimeout(function() {
+                    $.get('/user-info', function(resp) {
+                        $('.loading').hide();
+                        if (resp.username === undefined) {
+                            $('.logged-out').show();
+                        } else {
+                            $('.logged-in').show();
+                            $('#user').text(resp.username);
+                        }
+                    });
+                }, 250);  // networks are too fast these days
+            });
+        </script>
     </body>
 </html>

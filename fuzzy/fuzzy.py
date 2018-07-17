@@ -17,6 +17,7 @@ JINJA_ENV = jinja2.Environment(
     loader=jinja2.FileSystemLoader('templates'),
     autoescape=True,
 )
+SECRET_FLAG_TWO = 'TODO: flag'
 
 
 def hashed_thing(thing):
@@ -49,6 +50,8 @@ def save_user(username, data):
 
 
 class Request:
+
+    user = None
 
     def __init__(self, environ):
         self._environ = environ
@@ -136,6 +139,7 @@ def view_register(request, match):
                 data = {
                     'username': username,
                     'hashed_password': hashed_thing(password),
+                    'is_admin': False,
                 }
                 request.user = data
                 save_user(username, data)
@@ -274,6 +278,25 @@ def view_data(request, match):
     return _view_static_files(match.group(1))
 
 
+def view_user_info(request, match):
+    if request.user:
+        return Response(
+            status='302 Found',
+            body=b'',
+            headers=(
+                ('Location', '/data/users/' + hashed_thing(request.user['username']) + '.json'),
+            ),
+        )
+    else:
+        return Response(
+            status='200 OK',
+            body=b'{}',
+            headers=(
+                ('Content-Type', 'application/json'),
+            ),
+        )
+
+
 URL_MAPPING = (
     ('^/$', view_home),
     ('^/register$', view_register),
@@ -281,8 +304,9 @@ URL_MAPPING = (
     ('^/logout$', view_logout),
     ('^/upload$', view_upload),
     ('^/upload-url$', view_upload_url),
+    ('^/user-info$', view_user_info),
     ('^/(main\.css|meyer\.css)$', view_static),
-    ('^/(data/(?:uploads|user)/[^/]+)$', view_data),
+    ('^/(data/(?:uploads|users)/[^/]+)$', view_data),
 )
 URL_MAPPING = tuple(
     (re.compile(pattern), view) for pattern, view in URL_MAPPING
