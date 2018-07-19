@@ -4,9 +4,10 @@
         <title>y/fuzzy</title>
         <link rel="stylesheet" href="meyer.css" />
         <link rel="stylesheet" href="main.css" />
+        <link rel="shortcut icon" href="/favicon.ico" />
     </head>
 
-    <body>
+    <body {% if request.user %}class="theme-{{request.user.theme}}"{% endif %} >
         <div class="container">
             <h1><a href="/">y/fuzzy</a></h1>
             <hr />
@@ -19,9 +20,18 @@
             </p>
             <p style="text-align: right; display: none;" class="logged-in">
                 Currently logged in as <tt id="user"></tt>.
+                <a href="/settings">Settings</a>
                 <a href="/logout">Log Out</a>
             </p>
             <hr />
+
+            {% if request.user and request.user.is_admin %}
+                <p>
+                    <strong>Hello admin!</strong>
+                    Your flag is: TODO
+                </p>
+                <hr />
+            {% endif %}
 
             {% block content %}
             {% endblock %}
@@ -34,11 +44,11 @@
                 setTimeout(function() {
                     $.get('/user-info', function(resp) {
                         $('.loading').hide();
-                        if (resp.username === undefined) {
+                        if (resp.display_name === undefined) {
                             $('.logged-out').show();
                         } else {
                             $('.logged-in').show();
-                            $('#user').text(resp.username);
+                            $('#user').text(resp.display_name);
                         }
                     });
                 }, 250);  // networks are too fast these days

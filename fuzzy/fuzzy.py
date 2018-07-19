@@ -44,14 +44,15 @@ def load_user(username, hashed=False):
         return None
 
 
-def save_user(username, data):
-    with open(user_data_path(username), 'w') as f:
+def save_user(username, data, hashed=False):
+    with open(user_data_path(username, hashed=hashed), 'w') as f:
         return json.dump(data, f, indent=4, sort_keys=True)
 
 
 class Request:
 
     user = None
+    username_hashed = None
 
     def __init__(self, environ):
         self._environ = environ
@@ -111,10 +112,10 @@ class Response:
         )
 
     @classmethod
-    def bad_request(cls):
+    def bad_request(cls, body=b'400 Bad Request'):
         return cls(
             status='400 Bad Request',
-            body=b'400 Bad Request',
+            body=body,
             headers=(),
         )
 
@@ -126,7 +127,7 @@ def view_home(request, match):
 def view_register(request, match):
     if request.method == 'POST':
         # TODO: could this be a cool thing? re.match without the $?
-        valid_re = '[a-z]{3,20}$'
+        valid_re = '^[a-z]{3,20}'
         username, = request.post_params.get('username', ('',))
         if not re.match(valid_re, username):
             error = 'Username must match regex: ' + valid_re
@@ -137,9 +138,14 @@ def view_register(request, match):
             else:
                 password = str(uuid.uuid4())
                 data = {
-                    'username': username,
                     'hashed_password': hashed_thing(password),
                     'is_admin': False,
+                    'theme': 'green',
+                    'welcome': (
+                        'Welcome, {request.user[display_name]}! '
+                        "Thanks for creating an account!"
+                    ),
+                    'display_name': username,
                 }
                 request.user = data
                 save_user(username, data)
@@ -201,14 +207,73 @@ def view_logout(request, match):
     )
 
 
+def view_settings(request, match):
+    if request.user is None:
+        return Response.bad_request(b'Log in first!')
+
+    error = None
+
+    if request.method == 'POST':
+        display_name, = request.post_params.get('displayname', ('',))
+        theme, = request.post_params.get('theme', ('',))
+        welcome, = request.post_params.get('welcome', ('',))
+
+        if not 3 <= len(display_name) <= 20:
+            error = 'Display name must be between 3 and 20 characters long.'
+
+        if theme not in {'default', 'green', 'blue'}:
+            error = 'Invalid theme selection.'
+
+        if not 3 <= len(welcome) <= 200:
+            error = 'Welcome message must be between 3 and 200 characters long.'
+
+        if error is None:
+            request.user['display_name'] = display_name
+            request.user['theme'] = theme
+            request.user['welcome'] = welcome
+            save_user(request.username_hashed, request.user, hashed=True)
+
+    return Response.from_template(
+        request,
+        'settings.jinja2',
+        {'error': error},
+    )
+
+
 def view_upload(request, match):
+    if request.user is None:
+        return Response.bad_request(b'Log in first!')
+
     if request.method != 'POST':
         return Response.bad_request()
 
-    # TODO: fix
+    if 'file' not in request.fs:
+        return Response.bad_request(b'Missing `file`.')
+
     upload = request.fs['file']
-    filename = upload.filename
-    with open(os.path.join('data', 'uploads', filename), 'wb') as f:
+
+    if upload.file is None:
+        return Response.bad_request(b'`file` must actually be a file.')
+
+    if upload.filename is None:
+        filename = 'unknown-filename-' + str(uuid.uuid4())
+    else:
+        filename = upload.filename
+
+    dest_filepath = os.path.abspath(os.path.join('data', 'uploads', filename))
+
+    # XXX: Path traversal expected, but let's prevent writing outside of
+    # `data`.
+    if not dest_filepath.startswith(os.path.abspath('data') + '/'):
+        return Response.bad_request(b'Bad upload path')
+
+    if not os.path.exists(os.path.dirname(dest_filepath)):
+        return Response.bad_request(b'Bad upload path')
+
+    if os.path.isdir(dest_filepath):
+        return Response.bad_request(b'Bad upload path')
+
+    with open(dest_filepath, 'wb') as f:
         shutil.copyfileobj(upload.file, f)
 
     return Response(
@@ -221,6 +286,9 @@ def view_upload(request, match):
 
 
 def view_upload_url(request, match):
+    if request.user is None:
+        return Response.bad_request(b'Log in first!')
+
     if request.method != 'POST':
         return Response.bad_request()
 
@@ -284,7 +352,7 @@ def view_user_info(request, match):
             status='302 Found',
             body=b'',
             headers=(
-                ('Location', '/data/users/' + hashed_thing(request.user['username']) + '.json'),
+                ('Location', '/data/users/' + request.username_hashed + '.json'),
             ),
         )
     else:
@@ -302,11 +370,12 @@ URL_MAPPING = (
     ('^/register$', view_register),
     ('^/login$', view_login),
     ('^/logout$', view_logout),
+    ('^/settings$', view_settings),
     ('^/upload$', view_upload),
     ('^/upload-url$', view_upload_url),
     ('^/user-info$', view_user_info),
-    ('^/(main\.css|meyer\.css)$', view_static),
-    ('^/(data/(?:uploads|users)/[^/]+)$', view_data),
+    ('^/(main\.css|meyer\.css|favicon\.ico)$', view_static),
+    ('^/(data/(?:uploads/|users/)?[^/]+)$', view_data),
 )
 URL_MAPPING = tuple(
     (re.compile(pattern), view) for pattern, view in URL_MAPPING
@@ -318,6 +387,7 @@ def execute(request):
     if session is not None:
         user = load_user(session, hashed=True)
         request.user = user
+        request.username_hashed = session
 
     for pattern, view in URL_MAPPING:
         m = pattern.match(request.path)

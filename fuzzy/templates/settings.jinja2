@@ -1,0 +1,45 @@
+{% extends 'base.jinja2' %}
+
+{% block content %}
+    <h2>Personal Settings</h2>
+    {% if error %}
+        <div class="error">{{error}}</div>
+    {% endif %}
+    <p>fuzzy is super customizable!</p>
+
+    <form method="POST">
+        <p>
+            <label for="displayname">
+                Display Name:
+                <input type="text" name="displayname" id="displayname" value="{{request.user.display_name}}" />
+            </label>
+        </p>
+        <p>
+            <label for="theme">
+                Theme:
+                <select name="theme" id="theme">
+                    <option value="default"
+                        {% if request.user.theme == 'default' %}selected="selected"{% endif %}
+                    >Default</option>
+
+                    <option value="green"
+                        {% if request.user.theme == 'green' %}selected="selected"{% endif %}
+                    >Green</option>
+
+                    <option value="blue"
+                        {% if request.user.theme == 'blue' %}selected="selected"{% endif %}
+                    >Blue</option>
+                </select>
+            </label>
+        </p>
+        <p>
+            <label for="welcome">
+                Welcome Message: <br />
+                <textarea name="welcome" id="welcome" style="width: 600px; height: 80px;">{{request.user.welcome}}</textarea>
+                <br />
+                <small>(friendly greeting displayed on home page)</small>
+            </label>
+        </p>
+        <p><input type="submit" value="Save" /></p>
+    </form>
+{% endblock %}

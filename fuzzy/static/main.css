@@ -4,6 +4,38 @@ body {
     padding: 60px;
 }
 
+body.theme-green {
+    background-color: #75a94e;
+}
+
+.theme-green .container {
+    background-color: #e4ffea;
+}
+
+.theme-green h1 a {
+    color: #38bc61 !important;
+}
+
+.theme-green hr {
+    background-color: #bee0c8;
+}
+
+body.theme-blue {
+    background-color: #4e62a9;
+}
+
+.theme-blue .container {
+    background-color: #e4e6ff;
+}
+
+.theme-blue h1 a {
+    color: #3854bc !important;
+}
+
+.theme-blue hr {
+    background-color: #bec8e0;
+}
+
 .container {
     padding: 30px;
     border-radius: 10px;
