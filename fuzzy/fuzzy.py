@@ -97,7 +97,7 @@ class Response:
         self.headers = headers
 
     def __call__(self, environ, start_response):
-        start_response(self.status, self.headers)
+        start_response(self.status, self.headers + (('X-From-Secret-Backend', '127.0.0.1:8080'),))
         return [self.body]
 
     @classmethod
@@ -294,12 +294,9 @@ def view_upload_url(request, match):
     if request.method != 'POST':
         return Response.bad_request()
 
-    # TODO: fix
     url, = request.post_params.get('url', ('',))
-
     if ':' not in url:
         url = 'http://' + url
-
 
     parsed = urllib.parse.urlparse(url)
 
@@ -310,50 +307,54 @@ def view_upload_url(request, match):
         return Response.bad_request(b'Bad URL!')
 
     # XXX: Here's where the sketchy validation happens...
-    # You can use another DNS name, or a slightly different IP format, or IPv6, etc.
-    if 'localhost' in parsed.netloc:
+    host, _, port = parsed.netloc.partition(':')
+
+    # localhost is lazy
+    if 'localhost' in host:
         return Response.bad_request(b"Nice try, but you can't steal our localhost secrets!")
 
-    bad_re = '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(?:$|:)'
-    if re.match(bad_re, parsed.netloc):
-        return Response.bad_request(
-            "Sorry, you can't upload from an IP (matches regex: {})".format(
-                bad_re,
-            ).encode('UTF-8')
-        )
-
-    # We do a bit better whitelisting here just to prevent too much silliness
-    # (though... no guarantees it's perfect)
-    host, _, port = parsed.netloc.partition(':')
-    if not port:
-        port = 80
-    try:
-        ip = socket.gethostbyname(host)
-    except socket.error as ex:
-        return Response.bad_request(b'Bad upload domain: ' + str(ex).encode('UTF-8'))
-
-    ip = ipaddress.IPv4Address(ip)
-    if (
+    def _bad_ip(ip):
+        return (
+            ip in ipaddress.ip_network('127.0.0.0/8') or
             ip in ipaddress.ip_network('10.0.0.0/8') or
             ip in ipaddress.ip_network('172.16.0.0/12') or
             ip in ipaddress.ip_network('192.168.0.0/16') or
             ip in ipaddress.ip_network('169.254.0.0/16')
-    ):
-        # lie to the user a little
-        return Response.bad_request(
-            b'Bad upload domain: Bad upload domain: [Errno -2] Name or service not known',
         )
 
-    headers = {'Host': parsed.netloc}
-    parsed = parsed._replace(netloc='{}:{}'.format(ip, port))
+    # passing an IP is too easy
+    try:
+        ip = ipaddress.IPv4Address(host)
+    except ValueError:
+        pass  # wasn't an IP
+    else:
+        if _bad_ip(ip):
+            return Response.bad_request(b"Nice try, but that's private IP space!")
+
+    # so is a DNS name resolving to localhost
+    try:
+        ip = socket.gethostbyname(host)
+    except socket.error as ex:
+        return Response.bad_request(b'Bad domain: ' + str(ex).encode('UTF-8'))
+    else:
+        ip = ipaddress.IPv4Address(ip)
+
+    if _bad_ip(ip):
+        return Response.bad_request(b"That domain resolves to a private network! No way am I fetching that.")
+
     url = urllib.parse.urlunparse(parsed)
+
     _, ext = os.path.splitext(url)
     if ext:
         ext = '.' + re.sub('[^0-9a-zA-Z]', 'X', ext)
+
     filename = str(uuid.uuid4()) + ext
     with open(os.path.join('data', 'uploads', filename), 'wb') as f:
         try:
-            req = requests.get(url, timeout=1, headers=headers)
+            # a couple vulnerabilties you could use here:
+            #  - TOCTOU on the DNS name
+            #  - follows redirects, including to localhost
+            req = requests.get(url, timeout=1)
         except requests.exceptions.RequestException as ex:
             return Response.bad_request(b'Error downloading file: ' + str(ex).encode('UTF-8'))
 
