@@ -27,7 +27,7 @@ def hashed_thing(thing):
     # for the usernames and passwords in this demo.
     return str(hashlib.sha256(
         (thing + 'ThisIsASecretSaltButNotAFlag').encode('UTF-8')
-    ).hexdigest())[:20]
+    ).hexdigest())[:40]
 
 
 def user_data_path(username, hashed=False):
@@ -129,7 +129,7 @@ def view_home(request, match):
 def view_register(request, match):
     if request.method == 'POST':
         # TODO: could this be a cool thing? re.match without the $?
-        valid_re = '^[a-z]{3,20}'
+        valid_re = '^[a-z]{3,20}$'
         username, = request.post_params.get('username', ('',))
         if not re.match(valid_re, username):
             error = 'Username must match regex: ' + valid_re
@@ -382,6 +382,11 @@ def _view_static_files(path):
         mimetype = 'application/octet-stream'
 
     try:
+        path = os.path.abspath(path)
+
+        if not path.startswith(os.path.abspath('data') + '/') and not path.startswith(os.path.abspath('static') + '/'):
+            return Response.bad_request(b'Bad upload path')
+
         with open(path, 'rb') as f:
             return Response(
                 status='200 OK',
