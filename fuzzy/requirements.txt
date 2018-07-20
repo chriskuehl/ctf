@@ -1,3 +1,4 @@
+dnspython
 gunicorn
 jinja2
 requests
