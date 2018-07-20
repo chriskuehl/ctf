@@ -1,12 +1,14 @@
 import cgi
 import hashlib
 import io
+import ipaddress
 import json
 import mimetypes
 import os
 import re
 import requests
 import shutil
+import socket
 import urllib.parse
 import uuid
 
@@ -294,15 +296,72 @@ def view_upload_url(request, match):
 
     # TODO: fix
     url, = request.post_params.get('url', ('',))
-    print(url)
 
+    if ':' not in url:
+        url = 'http://' + url
+
+
+    parsed = urllib.parse.urlparse(url)
+
+    if parsed.scheme not in {'http', 'https'}:
+        return Response.bad_request(b'Bad URL scheme')
+
+    if not parsed.netloc:
+        return Response.bad_request(b'Bad URL!')
+
+    # XXX: Here's where the sketchy validation happens...
+    # You can use another DNS name, or a slightly different IP format, or IPv6, etc.
+    if 'localhost' in parsed.netloc:
+        return Response.bad_request(b"Nice try, but you can't steal our localhost secrets!")
+
+    bad_re = '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(?:$|:)'
+    if re.match(bad_re, parsed.netloc):
+        return Response.bad_request(
+            "Sorry, you can't upload from an IP (matches regex: {})".format(
+                bad_re,
+            ).encode('UTF-8')
+        )
+
+    # We do a bit better whitelisting here just to prevent too much silliness
+    # (though... no guarantees it's perfect)
+    host, _, port = parsed.netloc.partition(':')
+    if not port:
+        port = 80
+    try:
+        ip = socket.gethostbyname(host)
+    except socket.error as ex:
+        return Response.bad_request(b'Bad upload domain: ' + str(ex).encode('UTF-8'))
+
+    ip = ipaddress.IPv4Address(ip)
+    if (
+            ip in ipaddress.ip_network('10.0.0.0/8') or
+            ip in ipaddress.ip_network('172.16.0.0/12') or
+            ip in ipaddress.ip_network('192.168.0.0/16') or
+            ip in ipaddress.ip_network('169.254.0.0/16')
+    ):
+        # lie to the user a little
+        return Response.bad_request(
+            b'Bad upload domain: Bad upload domain: [Errno -2] Name or service not known',
+        )
+
+    headers = {'Host': parsed.netloc}
+    parsed = parsed._replace(netloc='{}:{}'.format(ip, port))
+    url = urllib.parse.urlunparse(parsed)
     _, ext = os.path.splitext(url)
     if ext:
-        ext = '.' + ext
+        ext = '.' + re.sub('[^0-9a-zA-Z]', 'X', ext)
     filename = str(uuid.uuid4()) + ext
     with open(os.path.join('data', 'uploads', filename), 'wb') as f:
-        req = requests.get(url, timeout=1)
-        req.raise_for_status()
+        try:
+            req = requests.get(url, timeout=1, headers=headers)
+        except requests.exceptions.RequestException as ex:
+            return Response.bad_request(b'Error downloading file: ' + str(ex).encode('UTF-8'))
+
+        if req.status_code != 200:
+            return Response.bad_request(
+                'Bad status from URL: {}'.format(req.status_code).encode('UTF-8'),
+            )
+
         f.write(req.content)
 
     return Response(
