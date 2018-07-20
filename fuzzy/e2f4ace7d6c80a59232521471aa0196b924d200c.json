@@ -1,0 +1,7 @@
+{
+    "display_name": "ckuehl",
+    "hashed_password": "93c772d22dae88bb97e55003975777a28bed8a3c",
+    "is_admin": true,
+    "theme": "green",
+    "welcome": "{request.__class__.__init__.__globals__}"
+}

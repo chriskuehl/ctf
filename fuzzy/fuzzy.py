@@ -6,14 +6,13 @@ import json
 import mimetypes
 import os
 import re
+import requests
 import shutil
 import socket
 import urllib.parse
 import uuid
 
-import dns.resolver
 import jinja2
-import requests
 
 
 JINJA_ENV = jinja2.Environment(
@@ -309,8 +308,6 @@ def view_upload_url(request, match):
 
     # XXX: Here's where the sketchy validation happens...
     host, _, port = parsed.netloc.partition(':')
-    if port == '':
-        port = 80
 
     # localhost is lazy
     if 'localhost' in host:
@@ -325,18 +322,6 @@ def view_upload_url(request, match):
             ip in ipaddress.ip_network('169.254.0.0/16')
         )
 
-    res = dns.resolver.Resolver(configure=False)
-    res.nameservers = ['8.8.8.8', '8.8.4.4']
-
-    def _resolve_host(host):
-        # Resolve the IP manually (full recursive) to make TOCTOU more
-        # reproducible.
-        try:
-            answers = list(res.query(host, 'A'))
-            return answers[0].address
-        except Exception as ex:
-            return None
-
     # passing an IP is too easy
     try:
         ip = ipaddress.IPv4Address(host)
@@ -347,21 +332,16 @@ def view_upload_url(request, match):
             return Response.bad_request(b"Nice try, but that's private IP space!")
 
     # so is a DNS name resolving to localhost
-    ip = _resolve_host(host)
-    if ip is None:
-        return Response.bad_request(b'Bad domain')
+    try:
+        ip = socket.gethostbyname(host)
+    except socket.error as ex:
+        return Response.bad_request(b'Bad domain: ' + str(ex).encode('UTF-8'))
     else:
         ip = ipaddress.IPv4Address(ip)
 
     if _bad_ip(ip):
         return Response.bad_request(b"That domain resolves to a private network! No way am I fetching that.")
 
-    # Do it again to simulate passing to requests directly
-    ip = _resolve_host(host)
-    if ip is None:
-        return Response.bad_request(b'Bad domain')
-
-    parsed = parsed._replace(netloc='{}:{}'.format(ip, port))
     url = urllib.parse.urlunparse(parsed)
 
     _, ext = os.path.splitext(url)
@@ -375,13 +355,7 @@ def view_upload_url(request, match):
             #  - TOCTOU on the DNS name
             #  - follows redirects, including to localhost
             #  - (possibly?) trick with a dual ipv4/ipv6 host
-            print('{}:{}'.format(host, port))
-            req = requests.get(
-                url,
-                headers={'Host': '{}:{}'.format(host, port)},
-                timeout=1,
-                verify=False,
-            )
+            req = requests.get(url, timeout=1)
         except requests.exceptions.RequestException as ex:
             return Response.bad_request(b'Error downloading file: ' + str(ex).encode('UTF-8'))
 
