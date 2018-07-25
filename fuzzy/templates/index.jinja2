@@ -16,7 +16,7 @@
             <a href="/register">Create Account</a> or <a href="/login">Log In</a>
         </p>
     {% else %}
-        <p>{{request.user.welcome.format(request=request)}}</p>
+        <p>{{welcome_message}}</p>
 
         <hr />
         <div class="sidebyside left">

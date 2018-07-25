@@ -1,4 +1,5 @@
 import cgi
+import datetime
 import hashlib
 import io
 import ipaddress
@@ -20,6 +21,12 @@ JINJA_ENV = jinja2.Environment(
     autoescape=True,
 )
 SECRET_FLAG_ONE = 'DNiawtSEIk2ox5G0DTypvrUSkDKW1lR9'
+
+
+def simple_log(stream, line):
+    ts = datetime.datetime.now().isoformat()
+    with open('logs', 'a') as f:
+        f.write(f'[{stream} {ts}] {line}\n')
 
 
 def hashed_thing(thing):
@@ -123,7 +130,11 @@ class Response:
 
 
 def view_home(request, match):
-    return Response.from_template(request, 'index.jinja2')
+    try:
+        welcome_message = request.user['welcome'].format(request=request)
+    except Exception as ex:
+        welcome_message = 'Error formatting welcome message. {}: {}'.format(type(ex).__name__, ex)
+    return Response.from_template(request, 'index.jinja2', {'welcome_message': welcome_message})
 
 
 def view_register(request, match):
@@ -233,6 +244,7 @@ def view_settings(request, match):
             request.user['display_name'] = display_name
             request.user['theme'] = theme
             request.user['welcome'] = welcome
+            simple_log('welcome_string_changed', welcome)
             save_user(request.username_hashed, request.user, hashed=True)
 
     return Response.from_template(
@@ -261,6 +273,8 @@ def view_upload(request, match):
         filename = 'unknown-filename-' + str(uuid.uuid4())
     else:
         filename = upload.filename
+
+    simple_log('uploads', f'upload with filename: {upload.filename}')
 
     dest_filepath = os.path.abspath(os.path.join('data', 'uploads', filename))
 
@@ -298,6 +312,8 @@ def view_upload_url(request, match):
     if ':' not in url:
         url = 'http://' + url
 
+    simple_log('upload_urls', f'url: {url}')
+
     parsed = urllib.parse.urlparse(url)
 
     if parsed.scheme not in {'http', 'https'}:
@@ -311,6 +327,7 @@ def view_upload_url(request, match):
 
     # localhost is lazy
     if 'localhost' in host:
+        simple_log('upload_urls_fails', f'tried to use localhost: {host}')
         return Response.bad_request(b"Nice try, but you can't steal our localhost secrets!")
 
     def _bad_ip(ip):
@@ -329,17 +346,20 @@ def view_upload_url(request, match):
         pass  # wasn't an IP
     else:
         if _bad_ip(ip):
+            simple_log('upload_urls_fails', f'tried to use private ip space: {host} {ip}')
             return Response.bad_request(b"Nice try, but that's private IP space!")
 
     # so is a DNS name resolving to localhost
     try:
         ip = socket.gethostbyname(host)
     except socket.error as ex:
+        simple_log('upload_urls_fails', f'tried to use non-resolving host: {host} {ex}')
         return Response.bad_request(b'Bad domain: ' + str(ex).encode('UTF-8'))
     else:
         ip = ipaddress.IPv4Address(ip)
 
     if _bad_ip(ip):
+        simple_log('upload_urls_fails', f'tried to use private network space: {host} {ip}')
         return Response.bad_request(b"That domain resolves to a private network! No way am I fetching that.")
 
     url = urllib.parse.urlunparse(parsed)
@@ -357,6 +377,7 @@ def view_upload_url(request, match):
             #  - (possibly?) trick with a dual ipv4/ipv6 host
             req = requests.get(url, timeout=1)
         except requests.exceptions.RequestException as ex:
+            simple_log('upload_urls_fails', f'error downloading url: {url} {ex}')
             return Response.bad_request(b'Error downloading file: ' + str(ex).encode('UTF-8'))
 
         if req.status_code != 200:
